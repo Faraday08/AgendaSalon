@@ -147,20 +147,22 @@ dotnet tool run dotnet-ef migrations add NombreDelCambio -p src/AgendaSalon.Infr
 | Pieza | Dónde | Plan |
 |---|---|---|
 | Web (React) | GitHub Pages | Gratis |
-| API (.NET 10) | Azure App Service | F1, gratis |
-| Base de datos | Azure SQL Database | Oferta gratuita: 100 000 segundos de vCore y 32 GB al mes, con **pausa automática** si se agota (nunca cobra) |
+| API (.NET 10) | MonsterASP.NET (IIS en Windows) | Gratis, sin tarjeta: 256 MB de RAM |
+| Base de datos | SQL Server en MonsterASP.NET | Gratis: 1 base de 1 GB |
 
-**Cómo se despliega:** cada push a `main` corre las pruebas y, si todo pasa, GitHub Actions publica la API en Azure y la web en GitHub Pages. GitHub entra a Azure con OIDC (identidad federada): no hay contraseñas de Azure guardadas en GitHub, y esa identidad solo puede desplegar en esta app.
+**Cómo se despliega:** cada push a `main` corre las pruebas y, si todo pasa, GitHub Actions publica la web en GitHub Pages y la API en MonsterASP con Web Deploy (`msdeploy`). El paso de despliegue es propio, no una acción de terceros: la contraseña viaja como secreto, se valida el certificado del servidor y la regla `AppOffline` reemplaza los archivos sin apagar el sitio.
 
-**Primera vez:** con Azure CLI (`az login`) y GitHub CLI (`gh auth login`) con sesión iniciada:
+**Dónde están los secretos:** la cadena de conexión, la clave del JWT y la cuenta del primer administrador son **variables de entorno del sitio en el panel de MonsterASP** (`ConnectionStrings__Agenda`, `Jwt__Clave`, `AdminInicial__Correo`, `AdminInicial__Contrasena`, `Cors__Origenes__0`). En GitHub solo está la contraseña de Web Deploy, como secreto del repositorio.
+
+**Primera vez:** crea el sitio y la base en el panel de MonsterASP, activa Web Deploy y, con GitHub CLI con sesión iniciada, ejecuta:
 
 ```bash
-powershell -ExecutionPolicy Bypass -File scripts/azure/crear-recursos.ps1
+powershell -ExecutionPolicy Bypass -File scripts/monsterasp/configurar-github.ps1
 ```
 
-El script revisa que la región ofrezca .NET 10 y la base gratuita antes de crear nada. Después crea los recursos, genera la contraseña de SQL y la clave del JWT directo en Azure (sin mostrarlas), configura los secretos del repositorio, activa GitHub Pages y lanza el primer despliegue.
+El script genera la clave del JWT y la copia al portapapeles (sin mostrarla), indica qué variables crear en el panel, guarda los datos de Web Deploy en GitHub, activa GitHub Pages y lanza el primer despliegue.
 
-**Límites del plan gratuito:** la API se duerme tras unos minutos sin visitas y la base se pausa; la primera visita después de eso tarda unos segundos. El plan F1 da 60 minutos de CPU al día y hasta 5 conexiones de SignalR a la vez, más que suficiente para una demo.
+**Límites del plan gratuito:** un solo sitio con subdominio gratuito, servidores en Europa y recursos modestos; suficiente para una demo. Si la aplicación estuvo inactiva, la primera visita tarda unos segundos en arrancarla.
 
 ## Pruebas
 

@@ -5,7 +5,7 @@ on:
     branches: ["**"]
   pull_request:
     branches: [main]
-  workflow_dispatch: # Permite lanzar el despliegue a mano (lo usa scripts/azure/crear-recursos.ps1).
+  workflow_dispatch: # Permite lanzar el despliegue a mano (lo usa scripts/monsterasp/configurar-github.ps1).
 
 permissions:
   contents: read
@@ -89,21 +89,20 @@ jobs:
       - name: Build
         run: npm run build
 
-  # ---------- Despliegue (solo main, con las pruebas en verde y Azure ya configurado) ----------
-  # Las variables y secretos los crea scripts/azure/crear-recursos.ps1. Mientras no existan, estos trabajos se omiten.
+  # ---------- Despliegue (solo main, con las pruebas en verde y el hosting ya configurado) ----------
+  # Las variables y el secreto los guarda scripts/monsterasp/configurar-github.ps1. Mientras no existan, se omiten.
 
   desplegar-api:
-    name: Desplegar la API en Azure
+    name: Desplegar la API en MonsterASP
     needs: [compilar-y-probar, frontend]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AZURE_WEBAPP_NAME != ''
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.MONSTERASP_SITIO != ''
+    runs-on: windows-latest # Web Deploy (msdeploy) viene instalado en los runners de Windows.
     timeout-minutes: 15
     environment:
       name: produccion
       url: ${{ vars.API_URL }}/salud
     permissions:
       contents: read
-      id-token: write # Inicio de sesión en Azure con OIDC, sin guardar contraseñas en GitHub.
 
     steps:
       - name: Obtener el código
@@ -114,25 +113,37 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # MonsterASP corre IIS en Windows con app pool de 32 bits; la publicación usa el runtime ya instalado allá.
       - name: Publicar la API
-        run: dotnet publish src/AgendaSalon.Api --configuration Release --output publicacion
+        run: dotnet publish src/AgendaSalon.Api --configuration Release --runtime win-x86 --self-contained false --output publicacion
 
-      - name: Iniciar sesión en Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # Paso propio en lugar de una acción de terceros: la contraseña va como variable de entorno secreta,
+      # se valida el certificado del servidor y AppOffline evita apagar el sitio mientras se copian los archivos.
+      - name: Subir con Web Deploy
+        shell: pwsh
+        env:
+          SITIO: ${{ vars.MONSTERASP_SITIO }}
+          SERVIDOR: ${{ vars.MONSTERASP_SERVIDOR }}
+          CONTRASENA: ${{ secrets.MONSTERASP_CONTRASENA }}
+        run: |
+          $msdeploy = 'C:\Program Files (x86)\IIS\Microsoft Web Deploy V3\msdeploy.exe'
+          $origen = (Resolve-Path publicacion).Path
+          $destino = "contentPath=$env:SITIO,computerName=$env:SERVIDOR/MsDeploy.axd?site=$env:SITIO,userName=$env:SITIO,password=$env:CONTRASENA,authType=Basic"
+          & $msdeploy -verb:sync -enableRule:AppOffline -enableRule:DoNotDeleteRule "-source:contentPath=$origen" "-dest:$destino"
+          if ($LASTEXITCODE -ne 0) { throw "Web Deploy terminó con el código $LASTEXITCODE." }
 
-      - name: Subir a App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          package: publicacion
-
-      # El plan gratuito arranca en frío: se reintenta hasta que la API conteste.
+      # La primera petición arranca la aplicación (y aplica las migraciones): se reintenta un rato.
       - name: Comprobar que la API responde
-        run: curl --fail --silent --show-error --retry 12 --retry-delay 15 --retry-all-errors "${{ vars.API_URL }}/salud"
+        shell: pwsh
+        run: |
+          for ($intento = 1; $intento -le 12; $intento++) {
+            try {
+              $respuesta = Invoke-WebRequest "${{ vars.API_URL }}/salud" -UseBasicParsing -TimeoutSec 30
+              if ($respuesta.StatusCode -eq 200) { Write-Host "La API responde: $($respuesta.Content)"; exit 0 }
+            } catch { Write-Host "Intento ${intento}: todavía no responde." }
+            Start-Sleep -Seconds 15
+          }
+          throw 'La API no respondió después del despliegue.'
 
   desplegar-web:
     name: Publicar la web en GitHub Pages
