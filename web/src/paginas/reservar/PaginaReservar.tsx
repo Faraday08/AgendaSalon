@@ -16,10 +16,11 @@ const Pasos: { id: Paso; nombre: string }[] = [
   { id: 'datos', nombre: 'Tus datos' },
 ]
 
-export function PaginaReservar() {
+/** Con <paramref name="servicioInicial"/> (elegido en el asistente guiado) empieza directamente en el día y la hora. */
+export function PaginaReservar({ servicioInicial = null }: { servicioInicial?: Servicio | null }) {
   const clienteConsultas = useQueryClient()
-  const [paso, setPaso] = useState<Paso>('servicio')
-  const [servicio, setServicio] = useState<Servicio | null>(null)
+  const [paso, setPaso] = useState<Paso>(servicioInicial ? 'horario' : 'servicio')
+  const [servicio, setServicio] = useState<Servicio | null>(servicioInicial)
   const [estilistaId, setEstilistaId] = useState<number | null>(null)
   const [fecha, setFecha] = useState<FechaLocal>(hoy)
   const [hueco, setHueco] = useState<HuecoDisponible | null>(null)

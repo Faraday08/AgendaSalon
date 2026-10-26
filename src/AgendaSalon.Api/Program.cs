@@ -68,9 +68,6 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy(PoliticasAutorizacion.LimiteLogin, contexto => RateLimitPartition.GetFixedWindowLimiter(
         contexto.Connection.RemoteIpAddress?.ToString() ?? "desconocida",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-    o.AddPolicy(PoliticasAutorizacion.LimiteOrientador, contexto => RateLimitPartition.GetSlidingWindowLimiter(
-        contexto.Connection.RemoteIpAddress?.ToString() ?? "desconocida",
-        _ => new SlidingWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(10), SegmentsPerWindow = 5, QueueLimit = 0 }));
 });
 
 builder.Services.AddControllers()

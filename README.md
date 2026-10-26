@@ -4,12 +4,11 @@
 
 Sistema de reservas para un salón de belleza y barbería. Los clientes ven los servicios, consultan horas libres y reservan su cita. El salón ve su agenda actualizada.
 
-> Estado: **en desarrollo**. Ya funcionan la reserva en línea, el panel del salón con la agenda en tiempo real y el asistente orientador con IA que recomienda el servicio y reserva por chat.
+> Estado: **en desarrollo**. Ya funcionan la reserva en línea, el asistente que orienta al cliente para elegir el servicio y el panel del salón con la agenda en tiempo real.
 
 ## Tecnologías
 
 - **Frontend:** React 19, TypeScript, Vite, TanStack Query y cliente de SignalR ([web/](web/README.md))
-- **Asistente con IA:** Claude (SDK oficial de Anthropic para C#) con uso de herramientas
 - ASP.NET Core 10 (Web API) con SignalR
 - Autenticación con JWT y roles
 - Entity Framework Core 10 con SQL Server y migraciones
@@ -27,7 +26,7 @@ Api  ──►  Infrastructure  ──►  Application  ──►  Domain
 | Proyecto | Responsabilidad | Depende de |
 |---|---|---|
 | `AgendaSalon.Domain` | Entidades con sus reglas (`Cita`, `Estilista`, `Servicio`, `Cliente`, `Usuario`), objetos de valor (`Telefono`, `Correo`, `CodigoCita`, `Intervalo`), la calculadora de disponibilidad, la política de contraseñas y las interfaces de los repositorios | Nada |
-| `AgendaSalon.Application` | Casos de uso (catálogo, disponibilidad, reservas, login, panel, cuentas), DTOs y abstracciones (`IUnidadDeTrabajo`, `IRelojSalon`, `IHasherContrasenas`, `IGeneradorToken`, `IUsuarioActual`, `INotificadorAgenda`) | Domain |
+| `AgendaSalon.Application` | Casos de uso (catálogo, disponibilidad, reservas, orientación, login, panel, cuentas), DTOs y abstracciones (`IUnidadDeTrabajo`, `IRelojSalon`, `IHasherContrasenas`, `IGeneradorToken`, `IUsuarioActual`, `INotificadorAgenda`) | Domain |
 | `AgendaSalon.Infrastructure` | `DbContext`, configuraciones por entidad, repositorios, unidad de trabajo, migraciones, reloj, hash de contraseñas y emisión de JWT | Application |
 | `AgendaSalon.Api` | Controladores, hub de SignalR, autenticación y autorización, límite de intentos de login, traducción de errores a HTTP y composición de dependencias | Application, Infrastructure |
 
@@ -73,6 +72,16 @@ Clientes 1──────────────* Citas *──────�
 - Para cancelar se pide el código de la cita y el teléfono con que se reservó.
 - Todas las horas son locales del salón (`America/Santo_Domingo`). Se configuran en la sección `Agenda` de `appsettings.json`.
 
+## Asistente para elegir el servicio
+
+Muchos clientes no saben cómo se llama lo que quieren. En la web pública, el botón **"¿No sabes qué pedir?"** abre un asistente que los orienta **sin IA y sin costo**:
+
+- **Preguntas con opciones:** "¿Qué te gustaría hacerte?" → "Cambiar el color" → "¿Un solo tono o mechas?" → recomendación con precio, duración y el motivo.
+- **Texto libre:** si el cliente prefiere escribir ("me caso el sábado", "tengo el pelo muy encrespado", "quiero pelarme y arreglarme la barba"), unas reglas de palabras clave lo llevan a la recomendación o a la pregunta que falta. El texto se normaliza (minúsculas, sin tildes) y las palabras se comparan por su raíz, así "cortarme", "corte" y "cortar" valen igual.
+- **De la recomendación a la reserva:** "Reservar este servicio" abre el asistente de reservas en el paso de día y hora con el servicio ya elegido.
+
+Las reglas están escritas como datos en `Application/Orientacion/ReglasOrientacion.cs`, así que agregar una pregunta o una palabra clave no requiere tocar la lógica. Si un servicio se desactiva, las opciones que llevaban a él se ocultan solas. Las pruebas incluyen frases reales de clientes y comprueban que todas las recomendaciones existen en el menú de demostración.
+
 ## Panel del salón
 
 El personal entra con correo y contraseña y recibe un **JWT** (válido 60 minutos) que envía en `Authorization: Bearer <token>`.
@@ -91,25 +100,6 @@ Medidas de seguridad:
 - Máximo 5 intentos de login por minuto por IP (luego responde 429).
 - La clave de firma del JWT y la contraseña del primer administrador **no están en el repositorio**: se leen de user-secrets en desarrollo o de variables de entorno en producción. La API no arranca si la clave mide menos de 32 bytes.
 - Los permisos se revisan dos veces: con políticas de autorización en la API y otra vez en los casos de uso.
-
-## Asistente orientador (IA)
-
-En la web pública hay un chat: el cliente cuenta qué quiere ("tengo el pelo muy encrespado", "es para una boda") y el asistente le recomienda un servicio del menú, busca horas libres y, cuando el cliente confirma el resumen, reserva la cita.
-
-```
-Cliente ──► POST /api/orientador/mensajes ──► OrientadorClaude ──► Claude
-                                                  ▲        │ pide una herramienta
-                                                  │        ▼
-                                       resultado  HerramientasOrientador ──► casos de uso de siempre
-```
-
-- **Herramientas** (`Application/Orientador/HerramientasOrientador.cs`): `ver_servicios`, `ver_estilistas`, `ver_horas_libres`, `reservar_cita` y `consultar_cita`. Llaman a los mismos casos de uso que la web, así que el asistente no puede saltarse ninguna regla: una hora ocupada sigue dando conflicto, un teléfono inválido sigue fallando.
-- **Reservar exige confirmación** dos veces: las instrucciones piden mostrar un resumen y esperar el "sí", y la herramienta rechaza la reserva si `cliente_confirmo` no es `true`.
-- **El agente** (`Infrastructure/Orientador/OrientadorClaude.cs`) ejecuta el ciclo de herramientas con el SDK oficial, guarda el historial en memoria (solo agrega al final, como requiere el razonamiento de Claude), maneja los rechazos del modelo y usa el modelo de respaldo recomendado por Anthropic (`fallbacks: "default"`).
-- **Costo bajo control:** esfuerzo `low`, 2048 tokens por respuesta, máximo 8 pasos por turno, 30 mensajes por conversación, 500 caracteres por mensaje y 20 mensajes cada 10 minutos por IP. Todo se ajusta en la sección `Orientador` de `appsettings.json`.
-- **Sin clave no se rompe nada:** si no hay clave de la API, `/api/orientador/estado` responde `disponible: false` y la web oculta el chat.
-
-La clave se guarda con user-secrets (`Orientador:ClaveApi`; el script de secretos la pide) o en la variable de entorno `ANTHROPIC_API_KEY`. Las pruebas usan una API de Claude simulada, así que no necesitan clave ni generan costo.
 
 ## Cómo ejecutarlo
 
@@ -175,8 +165,8 @@ Públicos (para los clientes):
 | POST | `/api/citas` | Reservar. Responde 409 si la hora ya no está libre |
 | GET | `/api/citas/{codigo}` | Consultar una cita |
 | POST | `/api/citas/{codigo}/cancelacion` | Cancelar con el teléfono del cliente |
-| GET | `/api/orientador/estado` | Si el asistente con IA está activo |
-| POST | `/api/orientador/mensajes` | Conversar con el asistente (`conversacionId` vacío para empezar) |
+| GET | `/api/orientacion/guia` | Preguntas del asistente con sus opciones y recomendaciones |
+| POST | `/api/orientacion/interpretar` | Lee el texto libre del cliente y sugiere por dónde seguir |
 
 Panel (requieren token):
 

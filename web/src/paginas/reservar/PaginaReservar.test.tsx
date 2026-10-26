@@ -67,6 +67,14 @@ describe('PaginaReservar', () => {
     expect(screen.getByRole('button', { name: /Corte de dama.*45 min.*RD\$\s?800/ })).toBeInTheDocument()
   })
 
+  it('con un servicio elegido en el asistente guiado empieza directamente en el día y la hora', async () => {
+    apiDelSalon()
+    renderizar(<PaginaReservar servicioInicial={servicios[0]} />)
+
+    expect(await screen.findByRole('heading', { name: '¿Cuándo te viene bien?' })).toBeInTheDocument()
+    expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Día y hora')
+  })
+
   it('con "cualquier estilista" muestra cada hora una sola vez', async () => {
     apiDelSalon()
     await llegarAlPasoDeDatos()

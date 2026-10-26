@@ -7,11 +7,11 @@ using System.Threading.Channels;
 using AgendaSalon.Application.Abstracciones;
 using AgendaSalon.Application.Autenticacion;
 using AgendaSalon.Application.Catalogo;
+using AgendaSalon.Application.Orientacion;
 using AgendaSalon.Application.Panel;
 using AgendaSalon.Application.Reservas;
 using AgendaSalon.Application.Usuarios;
 using AgendaSalon.Domain.Citas;
-using AgendaSalon.Infrastructure.Orientador;
 using AgendaSalon.Infrastructure.Persistencia;
 using AgendaSalon.IntegrationTests.Soporte;
 using Microsoft.AspNetCore.Hosting;
@@ -62,9 +62,6 @@ public sealed class ApiPanelTests : IAsyncLifetime
                 services.AddDbContext<AgendaDbContext>(o => o.UseSqlite(_conexion));
                 services.RemoveAll<IRelojSalon>();
                 services.AddSingleton<IRelojSalon>(new RelojFijo(Ahora));
-                // Sin clave de Claude, aunque el equipo tenga ANTHROPIC_API_KEY definida.
-                services.RemoveAll<ClienteClaude>();
-                services.AddSingleton(new ClienteClaude(null));
             });
         });
         _http = _fabrica.CreateClient();
@@ -113,13 +110,18 @@ public sealed class ApiPanelTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Orientador_SinClave_SeReportaInactivoYResponde503()
+    public async Task Orientacion_ConElMenuReal_TodasLasRecomendacionesTienenServicios()
     {
-        var estado = await _http.GetFromJsonAsync<JsonElement>("api/orientador/estado", Json);
-        var mensaje = await _http.PostAsJsonAsync("api/orientador/mensajes", new { conversacionId = (Guid?)null, mensaje = "Hola" });
+        // Comprueba que los nombres usados en las reglas coinciden con los datos de demostración.
+        var guia = await _http.GetFromJsonAsync<GuiaOrientacionDto>("api/orientacion/guia", Json);
+        var recomendaciones = guia!.Preguntas.SelectMany(p => p.Opciones).Select(o => o.Recomendacion).OfType<RecomendacionDto>().ToList();
+        var interpretado = await _http.PostAsJsonAsync("api/orientacion/interpretar", new { texto = "Me caso el sábado" });
+        var resultado = await interpretado.Content.ReadFromJsonAsync<InterpretacionDto>(Json);
 
-        Assert.False(estado.GetProperty("disponible").GetBoolean());
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, mensaje.StatusCode);
+        // 14 opciones terminan en recomendación: si alguna desaparece es porque no encontró su servicio.
+        Assert.Equal(14, recomendaciones.Count);
+        Assert.All(recomendaciones, r => Assert.NotEmpty(r.Servicios));
+        Assert.Contains(resultado!.Recomendacion!.Servicios, s => s.Nombre == "Peinado para evento");
     }
 
     [Fact]

@@ -115,6 +115,11 @@ a {
   outline-offset: 2px;
 }
 
+/* Títulos que reciben el foco por código (para que los lectores de pantalla los anuncien): sin recuadro. */
+[tabindex='-1']:focus {
+  outline: none;
+}
+
 .solo-lectores {
   position: absolute;
   width: 1px;
@@ -859,8 +864,8 @@ dialog.dialogo::backdrop {
   }
 }
 
-/* ===== Chat del asistente ===== */
-.chat-lanzador {
+/* ===== Asistente guiado ===== */
+.asistente-lanzador {
   position: fixed;
   right: 16px;
   bottom: 16px;
@@ -868,15 +873,15 @@ dialog.dialogo::backdrop {
   box-shadow: var(--sombra-alta);
 }
 
-.chat {
+.asistente {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 40;
   display: flex;
   flex-direction: column;
-  width: min(400px, calc(100vw - 32px));
-  height: min(620px, calc(100dvh - 32px));
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(680px, calc(100dvh - 32px));
   background: var(--color-superficie);
   border: 1px solid var(--color-borde);
   border-radius: var(--radio);
@@ -884,126 +889,89 @@ dialog.dialogo::backdrop {
   overflow: hidden;
 }
 
-.chat-cabecera {
+.asistente-cabecera {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 16px;
+  padding: 10px 12px 10px 16px;
   background: var(--color-primario-suave);
   border-bottom: 1px solid var(--color-borde);
 }
 
-.chat-cabecera h2 {
-  font-size: 1.1rem;
-  margin: 0 0 4px;
+.asistente-marca {
+  font-weight: 700;
+  color: var(--color-primario);
 }
 
-.chat-cabecera p {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--color-texto-suave);
-}
-
-.chat-mensajes {
+.asistente-cuerpo {
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 0;
+  gap: 12px;
   padding: 16px;
+}
+
+.asistente-cuerpo h2 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.asistente-cuerpo > .boton {
+  align-self: flex-start;
+}
+
+.asistente-aviso {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-texto-suave);
+}
+
+.asistente-opciones {
+  display: grid;
+  gap: 8px;
+}
+
+.asistente-opciones .opcion {
+  font-weight: 600;
+}
+
+.asistente-recomendaciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
   list-style: none;
 }
 
-.burbuja {
-  max-width: 85%;
-  padding: 10px 14px;
-  border-radius: 16px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.burbuja-asistente {
-  align-self: flex-start;
-  background: var(--color-superficie-suave);
-  border-bottom-left-radius: 4px;
-}
-
-.burbuja-cliente {
-  align-self: flex-end;
-  background: var(--color-primario);
-  color: var(--color-sobre-primario);
-  border-bottom-right-radius: 4px;
-}
-
-.burbuja-error {
-  align-self: stretch;
-  max-width: none;
-  background: var(--color-peligro-suave);
-  color: var(--color-peligro);
-  font-size: 0.9rem;
-}
-
-.burbuja-escribiendo {
+.asistente-recomendaciones .tarjeta {
   display: flex;
+  flex-direction: column;
   gap: 4px;
   padding: 14px;
 }
 
-.burbuja-escribiendo span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-texto-suave);
-  animation: escribiendo 1.2s infinite ease-in-out;
+.asistente-recomendaciones .boton {
+  align-self: flex-start;
+  margin-top: 6px;
 }
 
-.burbuja-escribiendo span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.burbuja-escribiendo span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes escribiendo {
-  0%,
-  60%,
-  100% {
-    opacity: 0.3;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-3px);
-  }
-}
-
-.chat-cita {
+.asistente-texto {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-left: 4px solid var(--color-exito);
-  border-radius: var(--radio-pequeno);
-  background: var(--color-exito-suave);
-  color: var(--color-texto);
-  white-space: normal;
-}
-
-.chat-formulario {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  padding: 12px;
+  gap: 6px;
+  padding: 12px 16px 16px;
   border-top: 1px solid var(--color-borde);
 }
 
-.chat-formulario textarea {
-  min-height: 44px;
-  resize: none;
+.asistente-texto label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.asistente-texto .fila {
+  flex-wrap: nowrap;
 }
 
 /* ===== Login ===== */

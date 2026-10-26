@@ -16,7 +16,6 @@ internal sealed class ManejadorExcepciones(IProblemDetailsService problemDetails
             ProhibidoException => StatusCodes.Status403Forbidden,
             NoEncontradoException => StatusCodes.Status404NotFound,
             ConflictoException => StatusCodes.Status409Conflict,
-            ServicioNoDisponibleException => StatusCodes.Status503ServiceUnavailable,
             _ => null
         };
 

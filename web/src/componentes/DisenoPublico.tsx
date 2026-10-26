@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { Marca } from './Marca'
-import { ChatOrientador } from './orientador/ChatOrientador'
+import { AsistenteGuiado } from './orientador/AsistenteGuiado'
 
 export function DisenoPublico() {
   return (
@@ -20,7 +20,7 @@ export function DisenoPublico() {
       <main className="contenedor">
         <Outlet />
       </main>
-      <ChatOrientador />
+      <AsistenteGuiado />
     </>
   )
 }

@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import type { Servicio } from './api/tipos'
 import { DisenoPublico } from './componentes/DisenoPublico'
 import { PaginaMiCita } from './paginas/PaginaMiCita'
 import { PaginaEntrar } from './paginas/panel/PaginaEntrar'
@@ -10,7 +11,7 @@ export function App() {
   return (
     <Routes>
       <Route element={<DisenoPublico />}>
-        <Route index element={<PaginaReservar />} />
+        <Route index element={<RutaReservar />} />
         <Route path="mi-cita" element={<PaginaMiCita />} />
         <Route path="panel/entrar" element={<PaginaEntrar />} />
       </Route>
@@ -25,4 +26,14 @@ export function App() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
+}
+
+/**
+ * El asistente guiado navega aquí con el servicio elegido en el estado de la navegación.
+ * La clave de la ubicación reinicia el asistente de reservas en cada navegación, aunque ya estuviera abierto.
+ */
+function RutaReservar() {
+  const ubicacion = useLocation()
+  const servicio = (ubicacion.state as { servicio?: Servicio } | null)?.servicio ?? null
+  return <PaginaReservar key={ubicacion.key} servicioInicial={servicio} />
 }
