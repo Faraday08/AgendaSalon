@@ -4,10 +4,11 @@
 
 Sistema de reservas para un salón de belleza y barbería. Los clientes ven los servicios, consultan horas libres y reservan su cita. El salón ve su agenda actualizada.
 
-> Estado: **backend en desarrollo**. Ya incluye la reserva pública y la API del panel del salón (login con JWT y avisos en tiempo real con SignalR). Próximos pasos: asistente orientador con IA y frontend en React.
+> Estado: **en desarrollo**. Ya funcionan la reserva en línea para clientes y el panel del salón con la agenda en tiempo real. Próximo paso: asistente orientador con IA que recomienda el servicio y reserva por chat.
 
 ## Tecnologías
 
+- **Frontend:** React 19, TypeScript, Vite, TanStack Query y cliente de SignalR ([web/](web/README.md))
 - ASP.NET Core 10 (Web API) con SignalR
 - Autenticación con JWT y roles
 - Entity Framework Core 10 con SQL Server y migraciones
@@ -94,7 +95,13 @@ Medidas de seguridad:
 
 Requisitos: .NET 10 y SQL Server. La cadena por defecto usa la instancia local con autenticación de Windows; se cambia en `ConnectionStrings:Agenda`.
 
-La primera vez, configura los secretos locales (se guardan fuera del repositorio):
+La primera vez, configura los secretos locales (se guardan en tu perfil, fuera del repositorio). El script genera una clave aleatoria para el JWT y te pide el correo y la contraseña del primer administrador sin mostrarla:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/configurar-secretos.ps1
+```
+
+O a mano:
 
 ```bash
 dotnet user-secrets set "Jwt:Clave" "<al menos 32 caracteres aleatorios>" --project src/AgendaSalon.Api
@@ -107,6 +114,16 @@ dotnet run --project src/AgendaSalon.Api --launch-profile http
 ```
 
 La API queda en `http://localhost:5063`. Al iniciar aplica las migraciones, crea la base `AgendaSalon` con servicios y estilistas de ejemplo y, si no existe, la cuenta del administrador inicial. El archivo `src/AgendaSalon.Api/AgendaSalon.Api.http` trae peticiones listas para probar.
+
+Con la API corriendo, inicia el frontend (detalles en [web/README.md](web/README.md)):
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Abre `http://localhost:5173` para reservar como cliente, o `http://localhost:5173/panel` para entrar al panel del salón.
 
 Para crear una migración después de cambiar el modelo:
 
