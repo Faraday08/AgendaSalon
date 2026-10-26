@@ -23,6 +23,13 @@ function Invoke-Az {
     return $salida
 }
 
+# Como Invoke-Az, pero devuelve $null en vez de fallar: sirve para preguntar si algo ya existe.
+function Find-Az {
+    $salida = & az @args 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $salida) { return $null }
+    return $salida
+}
+
 function New-Aleatorio([int] $longitud, [string] $alfabeto) {
     $generador = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     try {
@@ -95,12 +102,22 @@ do {
     if (-not $valida) { Write-Host 'No cumple los requisitos, prueba otra.' -ForegroundColor Yellow }
 } until ($valida)
 
+# ---------- Proveedores de recursos ----------
+# Una suscripción nueva debe registrar cada servicio antes de usarlo la primera vez. Es gratis y solo se hace una vez.
+foreach ($proveedor in 'Microsoft.Sql', 'Microsoft.Web') {
+    Write-Paso "Registrando el proveedor $proveedor (puede tardar un par de minutos)"
+    Invoke-Az provider register --namespace $proveedor --wait --output none
+}
+
 # ---------- Nombres y secretos generados ----------
-$sufijo = New-Aleatorio 5 'abcdefghijkmnpqrstuvwxyz23456789'
+# Si el script ya se ejecutó antes y falló a medias, se reutiliza lo que exista en el grupo en vez de duplicarlo.
 $grupo = "rg-$Nombre"
-$servidorSql = "$Nombre-sql-$sufijo"
 $plan = "$Nombre-plan"
-$app = "$Nombre-api-$sufijo"
+$sufijo = New-Aleatorio 5 'abcdefghijkmnpqrstuvwxyz23456789'
+$servidorSql = Find-Az sql server list --resource-group $grupo --query '[0].name' --output tsv
+if (-not $servidorSql) { $servidorSql = "$Nombre-sql-$sufijo" }
+$app = Find-Az webapp list --resource-group $grupo --query '[0].name' --output tsv
+if (-not $app) { $app = "$Nombre-api-$sufijo" }
 $usuarioSql = 'agendaadmin'
 # Solo letras y números: cumple la complejidad de Azure SQL y no se rompe en la línea de comandos.
 $contrasenaSql = 'Aa1' + (New-Aleatorio 29 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789')
@@ -115,21 +132,30 @@ Write-Paso "Grupo de recursos $grupo"
 Invoke-Az group create --name $grupo --location $Region --output none
 
 Write-Paso "Servidor SQL $servidorSql"
-Invoke-Az sql server create --name $servidorSql --resource-group $grupo --location $Region `
-    --admin-user $usuarioSql --admin-password $contrasenaSql --minimal-tls-version 1.2 --output none
+if (Find-Az sql server show --resource-group $grupo --name $servidorSql --query name --output tsv) {
+    # Ya existía: se le pone la contraseña nueva, porque la anterior no se guardó en ningún lado.
+    Invoke-Az sql server update --resource-group $grupo --name $servidorSql --admin-password $contrasenaSql --output none
+} else {
+    Invoke-Az sql server create --name $servidorSql --resource-group $grupo --location $Region `
+        --admin-user $usuarioSql --admin-password $contrasenaSql --minimal-tls-version 1.2 --output none
+}
 # 0.0.0.0 es la regla especial de Azure para "servicios de Azure", no abre la base a Internet.
 Invoke-Az sql server firewall-rule create --resource-group $grupo --server $servidorSql --name PermitirServiciosAzure `
     --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 --output none
 
 Write-Paso 'Base AgendaSalon con la oferta gratuita (se pausa al agotar la cuota del mes)'
-Invoke-Az sql db create --resource-group $grupo --server $servidorSql --name AgendaSalon `
-    --edition GeneralPurpose --family Gen5 --capacity 2 --compute-model Serverless `
-    --use-free-limit --free-limit-exhaustion-behavior AutoPause --backup-storage-redundancy Local --output none
+if (-not (Find-Az sql db show --resource-group $grupo --server $servidorSql --name AgendaSalon --query name --output tsv)) {
+    Invoke-Az sql db create --resource-group $grupo --server $servidorSql --name AgendaSalon `
+        --edition GeneralPurpose --family Gen5 --capacity 2 --compute-model Serverless `
+        --use-free-limit --free-limit-exhaustion-behavior AutoPause --backup-storage-redundancy Local --output none
+}
 
 # ---------- API ----------
 Write-Paso "Plan App Service F1 (gratis) y app $app"
 Invoke-Az appservice plan create --resource-group $grupo --name $plan --location $Region --sku F1 --is-linux --output none
-Invoke-Az webapp create --resource-group $grupo --plan $plan --name $app --runtime $runtime --output none
+if (-not (Find-Az webapp show --resource-group $grupo --name $app --query name --output tsv)) {
+    Invoke-Az webapp create --resource-group $grupo --plan $plan --name $app --runtime $runtime --output none
+}
 Invoke-Az webapp config set --resource-group $grupo --name $app --web-sockets-enabled true `
     --startup-file 'dotnet AgendaSalon.Api.dll' --min-tls-version 1.2 --ftps-state Disabled --output none
 Invoke-Az webapp update --resource-group $grupo --name $app --https-only true --output none
@@ -151,26 +177,33 @@ Remove-Variable contrasenaAdmin, contrasenaSql, claveJwt, cadena
 
 # ---------- Identidad de GitHub Actions (OIDC) ----------
 Write-Paso 'Identidad para que GitHub Actions despliegue sin contraseñas'
-$idCliente = Invoke-Az ad app create --display-name "github-$app" --query appId --output tsv
-Invoke-Az ad sp create --id $idCliente --output none
-$credencial = @{
-    name = 'github-produccion'
-    issuer = 'https://token.actions.githubusercontent.com'
-    subject = "repo:${repo}:environment:produccion"
-    audiences = @('api://AzureADTokenExchange')
+$idCliente = Find-Az ad app list --display-name "github-$app" --query '[0].appId' --output tsv
+if (-not $idCliente) { $idCliente = Invoke-Az ad app create --display-name "github-$app" --query appId --output tsv }
+if (-not (Find-Az ad sp show --id $idCliente --query id --output tsv)) { Invoke-Az ad sp create --id $idCliente --output none }
+
+$yaTieneCredencial = Find-Az ad app federated-credential list --id $idCliente --query "[?name=='github-produccion'].name" --output tsv
+if (-not $yaTieneCredencial) {
+    $credencial = @{
+        name = 'github-produccion'
+        issuer = 'https://token.actions.githubusercontent.com'
+        subject = "repo:${repo}:environment:produccion"
+        audiences = @('api://AzureADTokenExchange')
+    }
+    $archivo = Join-Path $env:TEMP ("credencial-" + [guid]::NewGuid() + '.json')
+    [IO.File]::WriteAllText($archivo, (ConvertTo-Json $credencial), (New-Object Text.UTF8Encoding $false))
+    try { Invoke-Az ad app federated-credential create --id $idCliente --parameters "@$archivo" --output none }
+    finally { Remove-Item $archivo -ErrorAction SilentlyContinue }
 }
-$archivo = Join-Path $env:TEMP ("credencial-" + [guid]::NewGuid() + '.json')
-[IO.File]::WriteAllText($archivo, (ConvertTo-Json $credencial), (New-Object Text.UTF8Encoding $false))
-try { Invoke-Az ad app federated-credential create --id $idCliente --parameters "@$archivo" --output none }
-finally { Remove-Item $archivo -ErrorAction SilentlyContinue }
 
 # Solo puede desplegar en esta app, nada más de la suscripción. La identidad tarda unos segundos en estar lista.
 $alcance = Invoke-Az webapp show --resource-group $grupo --name $app --query id --output tsv
-for ($intento = 1; $intento -le 6; $intento++) {
-    az role assignment create --assignee $idCliente --role 'Website Contributor' --scope $alcance --output none 2>$null
-    if ($LASTEXITCODE -eq 0) { break }
-    if ($intento -eq 6) { throw 'No se pudo dar permiso de despliegue a la identidad de GitHub.' }
-    Start-Sleep -Seconds 15
+if (-not (Find-Az role assignment list --assignee $idCliente --scope $alcance --role 'Website Contributor' --query '[0].id' --output tsv)) {
+    for ($intento = 1; $intento -le 6; $intento++) {
+        az role assignment create --assignee $idCliente --role 'Website Contributor' --scope $alcance --output none 2>$null
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($intento -eq 6) { throw 'No se pudo dar permiso de despliegue a la identidad de GitHub.' }
+        Start-Sleep -Seconds 15
+    }
 }
 
 # ---------- GitHub ----------
