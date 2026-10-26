@@ -1,0 +1,34 @@
+@api = http://localhost:5063/api
+
+### Servicios del salón
+GET {{api}}/servicios
+
+### Estilistas que hacen el servicio 1
+GET {{api}}/estilistas?servicioId=1
+
+### Horas libres para un servicio en una fecha
+GET {{api}}/disponibilidad?servicioId=1&fecha=2026-10-29
+
+### Reservar (sin estilista: se asigna el primero libre)
+POST {{api}}/citas
+Content-Type: application/json
+
+{
+  "servicioId": 1,
+  "estilistaId": null,
+  "inicio": "2026-10-29T10:00:00",
+  "clienteNombre": "María Rodríguez",
+  "clienteTelefono": "809-555-1234",
+  "notas": "Primera vez en el salón"
+}
+
+### Consultar una cita (reemplaza el código)
+GET {{api}}/citas/ABC234
+
+### Cancelar una cita
+POST {{api}}/citas/ABC234/cancelacion
+Content-Type: application/json
+
+{
+  "telefono": "809-555-1234"
+}

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AgendaSalon.Api/AgendaSalon.Api.csproj" />
+    <Project Path="src/AgendaSalon.Application/AgendaSalon.Application.csproj" />
+    <Project Path="src/AgendaSalon.Domain/AgendaSalon.Domain.csproj" />
+    <Project Path="src/AgendaSalon.Infrastructure/AgendaSalon.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AgendaSalon.Domain.Tests/AgendaSalon.Domain.Tests.csproj" />
+    <Project Path="tests/AgendaSalon.IntegrationTests/AgendaSalon.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,40 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{csproj,props,json}]
+indent_size = 2
+
+[*.cs]
+indent_size = 4
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = when_multiline:suggestion
+dotnet_sort_system_directives_first = true
+
+# Constantes y campos estáticos de solo lectura: PascalCase.
+dotnet_naming_rule.constantes.symbols = constantes
+dotnet_naming_rule.constantes.style = pascal
+dotnet_naming_rule.constantes.severity = warning
+dotnet_naming_symbols.constantes.applicable_kinds = field
+dotnet_naming_symbols.constantes.required_modifiers = const
+
+dotnet_naming_rule.estaticos_solo_lectura.symbols = estaticos_solo_lectura
+dotnet_naming_rule.estaticos_solo_lectura.style = pascal
+dotnet_naming_rule.estaticos_solo_lectura.severity = warning
+dotnet_naming_symbols.estaticos_solo_lectura.applicable_kinds = field
+dotnet_naming_symbols.estaticos_solo_lectura.required_modifiers = static, readonly
+
+# Campos privados de instancia: _camelCase.
+dotnet_naming_rule.campos_privados.symbols = campos_privados
+dotnet_naming_rule.campos_privados.style = guion_bajo
+dotnet_naming_rule.campos_privados.severity = warning
+dotnet_naming_symbols.campos_privados.applicable_kinds = field
+dotnet_naming_symbols.campos_privados.applicable_accessibilities = private
+
+dotnet_naming_style.pascal.capitalization = pascal_case
+dotnet_naming_style.guion_bajo.capitalization = camel_case
+dotnet_naming_style.guion_bajo.required_prefix = _
