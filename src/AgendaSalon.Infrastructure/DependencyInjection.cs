@@ -1,5 +1,7 @@
 using System.Text;
 using AgendaSalon.Application.Abstracciones;
+using AgendaSalon.Application.Orientador;
+using AgendaSalon.Infrastructure.Orientador;
 using AgendaSalon.Domain.Agenda;
 using AgendaSalon.Domain.Citas;
 using AgendaSalon.Domain.Clientes;
@@ -22,6 +24,7 @@ public static class DependencyInjection
     private const string SeccionAgenda = "Agenda";
     private const string SeccionJwt = "Jwt";
     private const string SeccionAdminInicial = "AdminInicial";
+    private const string SeccionOrientador = "Orientador";
 
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
@@ -43,9 +46,21 @@ public static class DependencyInjection
                 $"Jwt:Clave debe tener al menos {OpcionesJwt.BytesMinimosClave} bytes. Configúrala con dotnet user-secrets.")
             .ValidateOnStart();
 
+        services.Configure<OpcionesOrientador>(configuration.GetSection(SeccionOrientador));
+
         return services
             .AddSeguridad()
+            .AddOrientador()
             .AddPersistencia(o => o.UseSqlServer(cadenaConexion));
+    }
+
+    /// <summary>Asistente con Claude. Queda desactivado (Disponible = false) si no hay clave de API.</summary>
+    public static IServiceCollection AddOrientador(this IServiceCollection services)
+    {
+        services.AddMemoryCache();
+        services.AddSingleton(proveedor => ClienteClaude.DesdeOpciones(proveedor.GetRequiredService<IOptions<OpcionesOrientador>>()));
+        services.AddSingleton<IOrientador, OrientadorClaude>();
+        return services;
     }
 
     /// <summary>Hash de contraseñas y emisión de tokens. Las opciones de JWT se configuran aparte.</summary>

@@ -41,6 +41,22 @@ Set-Secreto 'AdminInicial:Correo' $correo
 Set-Secreto 'AdminInicial:Contrasena' $contrasena
 Remove-Variable contrasena
 
+# Opcional: clave de la API de Claude para el asistente orientador. Sin ella, el chat no aparece en la web.
+$seguraClave = Read-Host 'Clave de la API de Claude (Enter para omitir)' -AsSecureString
+$puntero = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($seguraClave)
+try {
+    $claveClaude = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($puntero)
+} finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($puntero)
+}
+if ($claveClaude) {
+    Set-Secreto 'Orientador:ClaveApi' $claveClaude
+    Write-Host 'Clave de Claude guardada: el asistente quedará activo.' -ForegroundColor Green
+} else {
+    Write-Host 'Sin clave de Claude: el asistente quedará desactivado (puedes agregarla después).' -ForegroundColor Yellow
+}
+Remove-Variable claveClaude
+
 Write-Host ''
 Write-Host 'Listo. Al iniciar, la API crea la cuenta del administrador si todavía no existe ninguno.' -ForegroundColor Green
 Write-Host 'Inicia la API con: dotnet run --project src/AgendaSalon.Api --launch-profile http'

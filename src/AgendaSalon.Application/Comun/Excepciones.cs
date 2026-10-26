@@ -9,6 +9,9 @@ public sealed class NoAutorizadoException(string mensaje) : Exception(mensaje);
 /// <summary>El usuario está identificado pero no tiene permiso para esta operación. Se traduce a HTTP 403.</summary>
 public sealed class ProhibidoException(string mensaje) : Exception(mensaje);
 
+/// <summary>Un servicio externo necesario no está disponible o no está configurado. Se traduce a HTTP 503.</summary>
+public sealed class ServicioNoDisponibleException(string mensaje) : Exception(mensaje);
+
 /// <summary>La operación choca con el estado actual de los datos. Se traduce a HTTP 409.</summary>
 public class ConflictoException(string mensaje) : Exception(mensaje);
 

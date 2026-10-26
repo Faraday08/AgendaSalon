@@ -1,6 +1,7 @@
 using AgendaSalon.Application.Autenticacion;
 using AgendaSalon.Application.Catalogo;
 using AgendaSalon.Application.Disponibilidad;
+using AgendaSalon.Application.Orientador;
 using AgendaSalon.Application.Panel;
 using AgendaSalon.Application.Reservas;
 using AgendaSalon.Application.Usuarios;
@@ -19,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IAutenticacionService, AutenticacionService>();
         services.AddScoped<IUsuarioService, UsuarioService>();
         services.AddScoped<IPanelCitasService, PanelCitasService>();
+        services.AddScoped<HerramientasOrientador>();
         return services;
     }
 }

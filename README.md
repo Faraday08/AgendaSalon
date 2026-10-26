@@ -4,11 +4,12 @@
 
 Sistema de reservas para un salón de belleza y barbería. Los clientes ven los servicios, consultan horas libres y reservan su cita. El salón ve su agenda actualizada.
 
-> Estado: **en desarrollo**. Ya funcionan la reserva en línea para clientes y el panel del salón con la agenda en tiempo real. Próximo paso: asistente orientador con IA que recomienda el servicio y reserva por chat.
+> Estado: **en desarrollo**. Ya funcionan la reserva en línea, el panel del salón con la agenda en tiempo real y el asistente orientador con IA que recomienda el servicio y reserva por chat.
 
 ## Tecnologías
 
 - **Frontend:** React 19, TypeScript, Vite, TanStack Query y cliente de SignalR ([web/](web/README.md))
+- **Asistente con IA:** Claude (SDK oficial de Anthropic para C#) con uso de herramientas
 - ASP.NET Core 10 (Web API) con SignalR
 - Autenticación con JWT y roles
 - Entity Framework Core 10 con SQL Server y migraciones
@@ -91,6 +92,25 @@ Medidas de seguridad:
 - La clave de firma del JWT y la contraseña del primer administrador **no están en el repositorio**: se leen de user-secrets en desarrollo o de variables de entorno en producción. La API no arranca si la clave mide menos de 32 bytes.
 - Los permisos se revisan dos veces: con políticas de autorización en la API y otra vez en los casos de uso.
 
+## Asistente orientador (IA)
+
+En la web pública hay un chat: el cliente cuenta qué quiere ("tengo el pelo muy encrespado", "es para una boda") y el asistente le recomienda un servicio del menú, busca horas libres y, cuando el cliente confirma el resumen, reserva la cita.
+
+```
+Cliente ──► POST /api/orientador/mensajes ──► OrientadorClaude ──► Claude
+                                                  ▲        │ pide una herramienta
+                                                  │        ▼
+                                       resultado  HerramientasOrientador ──► casos de uso de siempre
+```
+
+- **Herramientas** (`Application/Orientador/HerramientasOrientador.cs`): `ver_servicios`, `ver_estilistas`, `ver_horas_libres`, `reservar_cita` y `consultar_cita`. Llaman a los mismos casos de uso que la web, así que el asistente no puede saltarse ninguna regla: una hora ocupada sigue dando conflicto, un teléfono inválido sigue fallando.
+- **Reservar exige confirmación** dos veces: las instrucciones piden mostrar un resumen y esperar el "sí", y la herramienta rechaza la reserva si `cliente_confirmo` no es `true`.
+- **El agente** (`Infrastructure/Orientador/OrientadorClaude.cs`) ejecuta el ciclo de herramientas con el SDK oficial, guarda el historial en memoria (solo agrega al final, como requiere el razonamiento de Claude), maneja los rechazos del modelo y usa el modelo de respaldo recomendado por Anthropic (`fallbacks: "default"`).
+- **Costo bajo control:** esfuerzo `low`, 2048 tokens por respuesta, máximo 8 pasos por turno, 30 mensajes por conversación, 500 caracteres por mensaje y 20 mensajes cada 10 minutos por IP. Todo se ajusta en la sección `Orientador` de `appsettings.json`.
+- **Sin clave no se rompe nada:** si no hay clave de la API, `/api/orientador/estado` responde `disponible: false` y la web oculta el chat.
+
+La clave se guarda con user-secrets (`Orientador:ClaveApi`; el script de secretos la pide) o en la variable de entorno `ANTHROPIC_API_KEY`. Las pruebas usan una API de Claude simulada, así que no necesitan clave ni generan costo.
+
 ## Cómo ejecutarlo
 
 Requisitos: .NET 10 y SQL Server. La cadena por defecto usa la instancia local con autenticación de Windows; se cambia en `ConnectionStrings:Agenda`.
@@ -155,6 +175,8 @@ Públicos (para los clientes):
 | POST | `/api/citas` | Reservar. Responde 409 si la hora ya no está libre |
 | GET | `/api/citas/{codigo}` | Consultar una cita |
 | POST | `/api/citas/{codigo}/cancelacion` | Cancelar con el teléfono del cliente |
+| GET | `/api/orientador/estado` | Si el asistente con IA está activo |
+| POST | `/api/orientador/mensajes` | Conversar con el asistente (`conversacionId` vacío para empezar) |
 
 Panel (requieren token):
 

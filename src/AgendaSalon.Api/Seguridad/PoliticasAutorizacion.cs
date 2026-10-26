@@ -12,4 +12,7 @@ public static class PoliticasAutorizacion
 
     /// <summary>Límite de intentos de inicio de sesión por dirección IP.</summary>
     public const string LimiteLogin = "login";
+
+    /// <summary>Límite de mensajes al asistente por dirección IP, para contener el costo del modelo.</summary>
+    public const string LimiteOrientador = "orientador";
 }

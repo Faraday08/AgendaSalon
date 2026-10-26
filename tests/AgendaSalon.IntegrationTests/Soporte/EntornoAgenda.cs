@@ -51,7 +51,8 @@ internal sealed class EntornoAgenda : IAsyncDisposable
 
     public T Obtener<T>() where T : notnull => _alcance.ServiceProvider.GetRequiredService<T>();
 
-    public static async Task<EntornoAgenda> CrearAsync()
+    /// <param name="configurar">Registros extra o reemplazos, aplicados al final.</param>
+    public static async Task<EntornoAgenda> CrearAsync(Action<IServiceCollection>? configurar = null)
     {
         var conexion = new SqliteConnection("Data Source=:memory:");
         await conexion.OpenAsync();
@@ -59,6 +60,7 @@ internal sealed class EntornoAgenda : IAsyncDisposable
         var usuario = new UsuarioActualFalso();
         var notificador = new NotificadorFalso();
         var services = new ServiceCollection()
+            .AddLogging()
             .AddApplication()
             .AddSeguridad()
             .AddPersistencia(o => o.UseSqlite(conexion))
@@ -77,6 +79,7 @@ internal sealed class EntornoAgenda : IAsyncDisposable
             o.Audiencia = "pruebas";
             o.Clave = new string('k', OpcionesJwt.BytesMinimosClave);
         });
+        configurar?.Invoke(services);
 
         var proveedor = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         var entorno = new EntornoAgenda(conexion, proveedor, usuario, notificador);

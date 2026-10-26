@@ -11,6 +11,7 @@ using AgendaSalon.Application.Panel;
 using AgendaSalon.Application.Reservas;
 using AgendaSalon.Application.Usuarios;
 using AgendaSalon.Domain.Citas;
+using AgendaSalon.Infrastructure.Orientador;
 using AgendaSalon.Infrastructure.Persistencia;
 using AgendaSalon.IntegrationTests.Soporte;
 using Microsoft.AspNetCore.Hosting;
@@ -61,6 +62,9 @@ public sealed class ApiPanelTests : IAsyncLifetime
                 services.AddDbContext<AgendaDbContext>(o => o.UseSqlite(_conexion));
                 services.RemoveAll<IRelojSalon>();
                 services.AddSingleton<IRelojSalon>(new RelojFijo(Ahora));
+                // Sin clave de Claude, aunque el equipo tenga ANTHROPIC_API_KEY definida.
+                services.RemoveAll<ClienteClaude>();
+                services.AddSingleton(new ClienteClaude(null));
             });
         });
         _http = _fabrica.CreateClient();
@@ -106,6 +110,16 @@ public sealed class ApiPanelTests : IAsyncLifetime
 
         Assert.All(codigos.Take(5), c => Assert.Equal(HttpStatusCode.Unauthorized, c));
         Assert.Equal(HttpStatusCode.TooManyRequests, codigos[5]);
+    }
+
+    [Fact]
+    public async Task Orientador_SinClave_SeReportaInactivoYResponde503()
+    {
+        var estado = await _http.GetFromJsonAsync<JsonElement>("api/orientador/estado", Json);
+        var mensaje = await _http.PostAsJsonAsync("api/orientador/mensajes", new { conversacionId = (Guid?)null, mensaje = "Hola" });
+
+        Assert.False(estado.GetProperty("disponible").GetBoolean());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, mensaje.StatusCode);
     }
 
     [Fact]

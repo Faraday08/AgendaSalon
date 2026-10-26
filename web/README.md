@@ -3,6 +3,7 @@
 Aplicación web en React para la [API de Agenda Salón](../README.md). Tiene dos partes:
 
 - **Reservas (pública):** el cliente elige servicio, estilista (o "cualquiera"), día y hora; deja su nombre y teléfono y recibe un código. En **Mi cita** consulta o cancela con ese código.
+- **Asistente con IA:** un chat flotante en las páginas públicas que recomienda el servicio, busca horas y reserva cuando el cliente confirma. Solo aparece si la API tiene configurada la clave de Claude.
 - **Panel del salón (privado):** el personal entra con su cuenta y ve la agenda del día con una columna por estilista. Las citas nuevas y los cambios llegan **en tiempo real** por SignalR, sin recargar. Desde la ficha de una cita se marca como completada, no asistida o cancelada.
 
 ## Tecnologías
