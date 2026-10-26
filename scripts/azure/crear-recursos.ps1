@@ -92,7 +92,7 @@ if (-not $runtime) { throw 'Azure todavía no ofrece .NET 10 en Linux en esta su
 
 Write-Host "Suscripción: $($cuenta.name)"
 Write-Host "Repositorio: $repo"
-Write-Host "Región:      $Region"
+Write-Host "Región:      $Region (si no tiene capacidad, se prueban otras)"
 Write-Host "Runtime:     $runtime"
 Write-Host ''
 Write-Host 'Se crearán: un grupo de recursos, un servidor y una base Azure SQL (oferta gratuita con pausa automática),'
@@ -138,16 +138,39 @@ $claveJwt = [Convert]::ToBase64String($bytesJwt)
 
 # ---------- Base de datos ----------
 Write-Paso "Grupo de recursos $grupo"
-Invoke-Az group create --name $grupo --location $Region --output none
+# Un grupo puede contener recursos de otras regiones: si ya existe, se usa tal cual.
+if (-not (Find-Az group show --name $grupo --query name --output tsv)) {
+    Invoke-Az group create --name $grupo --location $Region --output none
+}
 
 Write-Paso "Servidor SQL $servidorSql"
-if (Find-Az sql server show --resource-group $grupo --name $servidorSql --query name --output tsv) {
+$regionApp = Find-Az sql server show --resource-group $grupo --name $servidorSql --query location --output tsv
+if ($regionApp) {
     # Ya existía: se le pone la contraseña nueva, porque la anterior no se guardó en ningún lado.
     Invoke-Az sql server update --resource-group $grupo --name $servidorSql --admin-password $contrasenaSql --output none
 } else {
-    Invoke-Az sql server create --name $servidorSql --resource-group $grupo --location $Region `
-        --admin-user $usuarioSql --admin-password $contrasenaSql --minimal-tls-version 1.2 --output none
+    # Algunas regiones no aceptan servidores SQL nuevos en suscripciones nuevas o gratuitas cuando están
+    # saturadas. Se prueban varias, empezando por la preferida; cualquier otro error detiene el script.
+    $candidatas = @($Region, 'eastus', 'centralus', 'westus2', 'southcentralus', 'westus3', 'canadacentral', 'northcentralus', 'brazilsouth') |
+        Select-Object -Unique
+    foreach ($candidata in $candidatas) {
+        Write-Host "   Probando la región $candidata..."
+        $salida = & {
+            $ErrorActionPreference = 'Continue'
+            az sql server create --name $servidorSql --resource-group $grupo --location $candidata `
+                --admin-user $usuarioSql --admin-password $contrasenaSql --minimal-tls-version 1.2 --output none 2>&1
+        }
+        if ($LASTEXITCODE -eq 0) { $regionApp = $candidata; break }
+
+        $motivo = $salida | Out-String
+        if ($motivo -notmatch 'RegionDoesNotAllowProvisioning|not accepting creation|ProvisioningDisabled') {
+            throw "No se pudo crear el servidor SQL: $motivo"
+        }
+        Write-Host "   $candidata no acepta servidores SQL nuevos ahora mismo." -ForegroundColor Yellow
+    }
+    if (-not $regionApp) { throw 'Ninguna de las regiones probadas aceptó el servidor SQL. Vuelve a intentarlo más tarde.' }
 }
+Write-Host "   Región: $regionApp (la API se creará en la misma región, para que esté cerca de la base)."
 # 0.0.0.0 es la regla especial de Azure para "servicios de Azure", no abre la base a Internet.
 Invoke-Az sql server firewall-rule create --resource-group $grupo --server $servidorSql --name PermitirServiciosAzure `
     --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 --output none
@@ -161,7 +184,7 @@ if (-not (Find-Az sql db show --resource-group $grupo --server $servidorSql --na
 
 # ---------- API ----------
 Write-Paso "Plan App Service F1 (gratis) y app $app"
-Invoke-Az appservice plan create --resource-group $grupo --name $plan --location $Region --sku F1 --is-linux --output none
+Invoke-Az appservice plan create --resource-group $grupo --name $plan --location $regionApp --sku F1 --is-linux --output none
 if (-not (Find-Az webapp show --resource-group $grupo --name $app --query name --output tsv)) {
     Invoke-Az webapp create --resource-group $grupo --plan $plan --name $app --runtime $runtime --output none
 }
