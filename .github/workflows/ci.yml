@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Si llega un push nuevo a la misma rama, se cancela la ejecución anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compilar-y-probar:
+    name: Compilar y probar
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Instalar .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # La restauración falla si algún paquete tiene vulnerabilidades conocidas
+      # (las advertencias de NuGet se tratan como errores en Directory.Build.props).
+      - name: Restaurar paquetes
+        run: dotnet restore
+
+      - name: Compilar
+        run: dotnet build --configuration Release --no-restore
+
+      # Las pruebas de integración usan SQLite en memoria, así que no hace falta SQL Server.
+      - name: Ejecutar pruebas
+        run: >
+          dotnet test --configuration Release --no-build
+          --logger "trx;LogFilePrefix=resultados"
+          --results-directory resultados-pruebas
+
+      - name: Guardar resultados de las pruebas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-pruebas
+          path: resultados-pruebas
+          if-no-files-found: ignore

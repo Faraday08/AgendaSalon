@@ -1,5 +1,7 @@
 # Agenda Salón
 
+[![CI](https://github.com/Faraday08/AgendaSalon/actions/workflows/ci.yml/badge.svg)](https://github.com/Faraday08/AgendaSalon/actions/workflows/ci.yml)
+
 Sistema de reservas para un salón de belleza y barbería. Los clientes ven los servicios, consultan horas libres y reservan su cita. El salón ve su agenda actualizada.
 
 > Estado: **backend en desarrollo**. Próximos pasos: panel del salón con calendario en tiempo real (SignalR) y login con JWT, asistente orientador con IA y frontend en React.
@@ -88,6 +90,8 @@ dotnet test
 
 - `AgendaSalon.Domain.Tests`: reglas del dominio sin base de datos (disponibilidad, citas, teléfonos, estilistas).
 - `AgendaSalon.IntegrationTests`: casos de uso completos con repositorios y EF Core sobre SQLite en memoria, sin necesitar SQL Server.
+
+GitHub Actions compila la solución y corre todas las pruebas en cada push y en cada pull request a `main` ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
 ## Endpoints
 
