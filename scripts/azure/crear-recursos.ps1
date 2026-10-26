@@ -67,7 +67,11 @@ $propietario = $repo.Split('/')[0].ToLowerInvariant()
 $ayudaSql = az sql db create --help | Out-String
 if ($ayudaSql -notmatch 'use-free-limit') { throw 'Tu versión de Azure CLI no tiene la oferta gratuita de SQL. Actualízala con: az upgrade' }
 
-$runtime = (Invoke-Az webapp list-runtimes --os linux --output tsv) | Where-Object { $_ -match '^DOTNETCORE[:|]10' } | Select-Object -First 1
+# La salida tsv trae varias columnas (versión, fin de soporte, sistema...): solo interesa la primera.
+$runtime = (Invoke-Az webapp list-runtimes --os linux --output tsv) |
+    ForEach-Object { ($_ -split "`t")[0].Trim() } |
+    Where-Object { $_ -match '^DOTNETCORE[:|]10(\.\d+)?$' } |
+    Select-Object -First 1
 if (-not $runtime) { throw 'Azure todavía no ofrece .NET 10 en Linux en esta suscripción. Revisa: az webapp list-runtimes --os linux' }
 
 Write-Host "Suscripción: $($cuenta.name)"
