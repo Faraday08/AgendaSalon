@@ -23,9 +23,18 @@ function Invoke-Az {
     return $salida
 }
 
+# En Windows PowerShell 5.1, con ErrorActionPreference = 'Stop', cualquier texto que un programa externo
+# escriba en stderr detiene el script aunque se redirija con 2>$null. Aquí se ejecuta sin detenerse
+# y el resultado se juzga por $LASTEXITCODE.
+function Invoke-Tolerante([scriptblock] $comando) {
+    $ErrorActionPreference = 'Continue'
+    & $comando 2>$null
+}
+
 # Como Invoke-Az, pero devuelve $null en vez de fallar: sirve para preguntar si algo ya existe.
 function Find-Az {
-    $salida = & az @args 2>$null
+    $argumentos = $args
+    $salida = Invoke-Tolerante { az @argumentos }
     if ($LASTEXITCODE -ne 0 -or -not $salida) { return $null }
     return $salida
 }
@@ -60,9 +69,9 @@ Write-Paso 'Comprobando herramientas y sesiones'
 foreach ($herramienta in 'az', 'gh') {
     if (-not (Get-Command $herramienta -ErrorAction SilentlyContinue)) { throw "Falta '$herramienta'. Instálalo y vuelve a ejecutar el script." }
 }
-$cuenta = az account show --output json 2>$null | ConvertFrom-Json
+$cuenta = Invoke-Tolerante { az account show --output json } | ConvertFrom-Json
 if (-not $cuenta) { throw 'No hay sesión de Azure. Ejecuta: az login' }
-gh auth status 2>$null | Out-Null
+Invoke-Tolerante { gh auth status } | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'No hay sesión de GitHub. Ejecuta: gh auth login' }
 # El repositorio sale de la carpeta del script, no de la carpeta desde donde se ejecuta:
 # así nunca se configuran secretos en otro repositorio por accidente.
@@ -199,7 +208,7 @@ if (-not $yaTieneCredencial) {
 $alcance = Invoke-Az webapp show --resource-group $grupo --name $app --query id --output tsv
 if (-not (Find-Az role assignment list --assignee $idCliente --scope $alcance --role 'Website Contributor' --query '[0].id' --output tsv)) {
     for ($intento = 1; $intento -le 6; $intento++) {
-        az role assignment create --assignee $idCliente --role 'Website Contributor' --scope $alcance --output none 2>$null
+        Invoke-Tolerante { az role assignment create --assignee $idCliente --role 'Website Contributor' --scope $alcance --output none }
         if ($LASTEXITCODE -eq 0) { break }
         if ($intento -eq 6) { throw 'No se pudo dar permiso de despliegue a la identidad de GitHub.' }
         Start-Sleep -Seconds 15
@@ -215,7 +224,7 @@ gh variable set AZURE_WEBAPP_NAME --repo $repo --body $app
 gh variable set API_URL --repo $repo --body $urlApi
 
 Write-Paso 'Activando GitHub Pages con despliegue desde GitHub Actions'
-gh api --method POST "repos/$repo/pages" -f build_type=workflow 2>$null | Out-Null
+Invoke-Tolerante { gh api --method POST "repos/$repo/pages" -f build_type=workflow } | Out-Null
 if ($LASTEXITCODE -ne 0) { gh api --method PUT "repos/$repo/pages" -f build_type=workflow | Out-Null }
 
 Write-Paso 'Lanzando el primer despliegue'
