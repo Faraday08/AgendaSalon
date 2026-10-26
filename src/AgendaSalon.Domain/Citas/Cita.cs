@@ -80,6 +80,16 @@ public sealed class Cita : Entidad
         Estado = EstadoCita.Cancelada;
     }
 
+    /// <summary>El salón cancela (por ejemplo, el estilista se enfermó). Se permite mientras la cita no haya terminado.</summary>
+    public void CancelarPorSalon(DateTime ahora)
+    {
+        AsegurarQueSigueConfirmada();
+        if (Fin <= ahora)
+            throw new ReglaNegocioException("No se puede cancelar una cita que ya terminó.");
+
+        Estado = EstadoCita.Cancelada;
+    }
+
     public void MarcarCompletada(DateTime ahora) => CerrarDespuesDeEmpezar(EstadoCita.Completada, ahora);
 
     public void MarcarNoAsistio(DateTime ahora) => CerrarDespuesDeEmpezar(EstadoCita.NoAsistio, ahora);

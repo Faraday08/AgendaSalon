@@ -7,4 +7,6 @@ public interface IEstilistaRepositorio
     /// Con <paramref name="servicioId"/>, solo los que realizan ese servicio.
     /// </summary>
     Task<IReadOnlyList<Estilista>> ListarActivosAsync(int? servicioId = null, CancellationToken ct = default);
+
+    Task<Estilista?> ObtenerActivoAsync(int id, CancellationToken ct = default);
 }

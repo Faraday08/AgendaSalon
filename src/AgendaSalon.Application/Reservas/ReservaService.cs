@@ -1,6 +1,7 @@
 using AgendaSalon.Application.Abstracciones;
 using AgendaSalon.Application.Comun;
 using AgendaSalon.Application.Disponibilidad;
+using AgendaSalon.Application.Panel;
 using AgendaSalon.Domain.Citas;
 using AgendaSalon.Domain.Clientes;
 using AgendaSalon.Domain.Servicios;
@@ -23,6 +24,7 @@ internal sealed class ReservaService(
     ICitaRepositorio citas,
     PlanificadorAgenda planificador,
     IUnidadDeTrabajo unidadDeTrabajo,
+    INotificadorAgenda notificador,
     IRelojSalon reloj) : IReservaService
 {
     public async Task<CitaDto> CrearAsync(CrearCitaRequest solicitud, CancellationToken ct = default)
@@ -33,15 +35,20 @@ internal sealed class ReservaService(
         var telefono = Telefono.Crear(solicitud.ClienteTelefono);
         var clienteNuevo = Cliente.Registrar(solicitud.ClienteNombre, telefono);
 
+        Cita cita;
         try
         {
-            return await unidadDeTrabajo.EjecutarEnTransaccionAsync(
+            cita = await unidadDeTrabajo.EjecutarEnTransaccionAsync(
                 transaccionCt => ReservarAsync(solicitud, clienteNuevo, transaccionCt), ct);
         }
         catch (ConcurrenciaException)
         {
             throw new ConflictoException(Mensajes.HorarioNoDisponible);
         }
+
+        // Se avisa al panel solo después de confirmar la transacción.
+        await notificador.CitaCreadaAsync(CitaPanelDto.Desde(cita), ct);
+        return CitaDto.Desde(cita);
     }
 
     public async Task<CitaDto> ObtenerAsync(string codigo, CancellationToken ct = default) =>
@@ -52,10 +59,12 @@ internal sealed class ReservaService(
         var cita = await BuscarCitaAsync(codigo, ct);
         cita.Cancelar(Telefono.Crear(telefono), reloj.Ahora);
         await unidadDeTrabajo.GuardarCambiosAsync(ct);
+
+        await notificador.CitaActualizadaAsync(CitaPanelDto.Desde(cita), ct);
         return CitaDto.Desde(cita);
     }
 
-    private async Task<CitaDto> ReservarAsync(CrearCitaRequest solicitud, Cliente clienteNuevo, CancellationToken ct)
+    private async Task<Cita> ReservarAsync(CrearCitaRequest solicitud, Cliente clienteNuevo, CancellationToken ct)
     {
         var servicio = await servicios.ObtenerActivoAsync(solicitud.ServicioId, ct)
             ?? throw new NoEncontradoException(Mensajes.ServicioNoDisponible);
@@ -78,7 +87,7 @@ internal sealed class ReservaService(
         citas.Agregar(cita);
         await unidadDeTrabajo.GuardarCambiosAsync(ct);
 
-        return CitaDto.Desde(cita);
+        return cita;
     }
 
     private async Task<Cita> BuscarCitaAsync(string codigo, CancellationToken ct)

@@ -1,8 +1,18 @@
+using AgendaSalon.Application.Abstracciones;
 using AgendaSalon.Domain.Estilistas;
 using AgendaSalon.Domain.Servicios;
+using AgendaSalon.Domain.Usuarios;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgendaSalon.Infrastructure.Persistencia;
+
+/// <summary>Sección "AdminInicial" de la configuración.</summary>
+public sealed class OpcionesAdminInicial
+{
+    public string Nombre { get; set; } = "Administrador";
+    public string? Correo { get; set; }
+    public string? Contrasena { get; set; }
+}
 
 /// <summary>Datos de demostración del salón. Solo se cargan si la base está vacía.</summary>
 internal static class DatosIniciales
@@ -48,6 +58,24 @@ internal static class DatosIniciales
         AgregarJornadas(yaritza, LunesASabado, new TimeOnly(9, 0), new TimeOnly(17, 0));
 
         db.Estilistas.AddRange(carla, luis, yaritza);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Crea la primera cuenta de administrador si se configuró en "AdminInicial" y todavía no hay ninguna.
+    /// Las credenciales vienen de user-secrets o variables de entorno, nunca del repositorio.
+    /// </summary>
+    public static async Task CrearAdministradorInicialAsync(
+        AgendaDbContext db, IHasherContrasenas hasher, OpcionesAdminInicial opciones, DateTime ahora, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(opciones.Correo) || string.IsNullOrEmpty(opciones.Contrasena))
+            return;
+        if (await db.Usuarios.AnyAsync(u => u.Rol == RolUsuario.Administrador, ct))
+            return;
+
+        PoliticaContrasenas.Validar(opciones.Contrasena);
+        db.Usuarios.Add(Usuario.CrearAdministrador(
+            opciones.Nombre, Correo.Crear(opciones.Correo), hasher.Hashear(opciones.Contrasena), ahora));
         await db.SaveChangesAsync(ct);
     }
 

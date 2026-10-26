@@ -32,3 +32,38 @@ Content-Type: application/json
 {
   "telefono": "809-555-1234"
 }
+
+############ Panel del salón ############
+# Usa el correo y la contraseña que configuraste en user-secrets (AdminInicial). No los guardes en este archivo.
+@correoAdmin = admin@tusalon.com
+@contrasenaAdmin = escribe-aqui-la-contraseña
+
+### Iniciar sesión (el token se reutiliza en las peticiones de abajo)
+# @name login
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "correo": "{{correoAdmin}}",
+  "contrasena": "{{contrasenaAdmin}}"
+}
+
+### Agenda de un día
+GET {{api}}/panel/citas?desde=2026-10-29&hasta=2026-10-29
+Authorization: Bearer {{login.response.body.$.token}}
+
+### Marcar una cita como completada (reemplaza el código)
+POST {{api}}/panel/citas/ABC234/completada
+Authorization: Bearer {{login.response.body.$.token}}
+
+### Crear la cuenta de un estilista (solo administradores)
+POST {{api}}/panel/usuarios/estilistas
+Authorization: Bearer {{login.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "nombre": "Luis Peña",
+  "correo": "luis@tusalon.com",
+  "contrasena": "Barberia2026Luis",
+  "estilistaId": 2
+}

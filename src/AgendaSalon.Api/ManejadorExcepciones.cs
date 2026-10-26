@@ -12,6 +12,8 @@ internal sealed class ManejadorExcepciones(IProblemDetailsService problemDetails
         int? codigo = exception switch
         {
             ReglaNegocioException => StatusCodes.Status400BadRequest,
+            NoAutorizadoException => StatusCodes.Status401Unauthorized,
+            ProhibidoException => StatusCodes.Status403Forbidden,
             NoEncontradoException => StatusCodes.Status404NotFound,
             ConflictoException => StatusCodes.Status409Conflict,
             _ => null

@@ -3,6 +3,7 @@ using AgendaSalon.Domain.Citas;
 using AgendaSalon.Domain.Clientes;
 using AgendaSalon.Domain.Estilistas;
 using AgendaSalon.Domain.Servicios;
+using AgendaSalon.Domain.Usuarios;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgendaSalon.Infrastructure.Persistencia.Repositorios;
@@ -48,6 +49,26 @@ internal sealed class EstilistaRepositorio(AgendaDbContext db) : IEstilistaRepos
             .AsSplitQuery()
             .ToListAsync(ct);
     }
+
+    public Task<Estilista?> ObtenerActivoAsync(int id, CancellationToken ct = default) =>
+        db.Estilistas.FirstOrDefaultAsync(e => e.Id == id && e.Activo, ct);
+}
+
+internal sealed class UsuarioRepositorio(AgendaDbContext db) : IUsuarioRepositorio
+{
+    public Task<Usuario?> ObtenerPorCorreoAsync(Correo correo, CancellationToken ct = default) =>
+        db.Usuarios.FirstOrDefaultAsync(u => u.Correo == correo, ct);
+
+    public Task<bool> ExisteCorreoAsync(Correo correo, CancellationToken ct = default) =>
+        db.Usuarios.AnyAsync(u => u.Correo == correo, ct);
+
+    public Task<bool> ExisteCuentaParaEstilistaAsync(int estilistaId, CancellationToken ct = default) =>
+        db.Usuarios.AnyAsync(u => u.EstilistaId == estilistaId, ct);
+
+    public Task<bool> ExisteAdministradorAsync(CancellationToken ct = default) =>
+        db.Usuarios.AnyAsync(u => u.Rol == RolUsuario.Administrador, ct);
+
+    public void Agregar(Usuario usuario) => db.Usuarios.Add(usuario);
 }
 
 internal sealed class CitaRepositorio(AgendaDbContext db) : ICitaRepositorio
@@ -77,6 +98,22 @@ internal sealed class CitaRepositorio(AgendaDbContext db) : ICitaRepositorio
             .ToListAsync(ct);
 
         return ocupadas.ToLookup(c => c.EstilistaId, c => new Intervalo(c.Inicio, c.Fin));
+    }
+
+    public async Task<IReadOnlyList<Cita>> ListarEntreAsync(
+        DateTime desde, DateTime hasta, int? estilistaId, CancellationToken ct = default)
+    {
+        var consulta = db.Citas
+            .AsNoTracking()
+            .Include(c => c.Cliente)
+            .Include(c => c.Servicio)
+            .Include(c => c.Estilista)
+            .Where(c => c.Inicio >= desde && c.Inicio < hasta);
+
+        if (estilistaId is not null)
+            consulta = consulta.Where(c => c.EstilistaId == estilistaId);
+
+        return await consulta.OrderBy(c => c.Inicio).ThenBy(c => c.Estilista.Nombre).ToListAsync(ct);
     }
 
     public void Agregar(Cita cita) => db.Citas.Add(cita);

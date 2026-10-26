@@ -13,5 +13,11 @@ public interface ICitaRepositorio
     Task<ILookup<int, Intervalo>> ObtenerOcupacionAsync(
         IReadOnlyCollection<int> estilistaIds, DateOnly fecha, CancellationToken ct = default);
 
+    /// <summary>
+    /// Citas que empiezan entre <paramref name="desde"/> (incluido) y <paramref name="hasta"/> (excluido),
+    /// con cliente, servicio y estilista, ordenadas por hora. Con <paramref name="estilistaId"/>, solo las de ese estilista.
+    /// </summary>
+    Task<IReadOnlyList<Cita>> ListarEntreAsync(DateTime desde, DateTime hasta, int? estilistaId, CancellationToken ct = default);
+
     void Agregar(Cita cita);
 }

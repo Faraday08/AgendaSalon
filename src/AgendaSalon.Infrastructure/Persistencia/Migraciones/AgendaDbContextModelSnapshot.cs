@@ -239,6 +239,61 @@ namespace AgendaSalon.Infrastructure.Persistencia.Migraciones
                         });
                 });
 
+            modelBuilder.Entity("AgendaSalon.Domain.Usuarios.Usuario", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Correo")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(254)");
+
+                    b.Property<DateTime>("CreadoEn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("EstilistaId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HashContrasena")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<byte>("Rol")
+                        .HasColumnType("tinyint")
+                        .HasColumnName("RolId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Correo")
+                        .IsUnique();
+
+                    b.HasIndex("EstilistaId")
+                        .IsUnique()
+                        .HasFilter("[EstilistaId] IS NOT NULL");
+
+                    b.HasIndex("Rol");
+
+                    b.ToTable("Usuarios", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Usuarios_RolEstilista", "([RolId] = 1 AND [EstilistaId] IS NULL) OR ([RolId] = 2 AND [EstilistaId] IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("AgendaSalon.Infrastructure.Persistencia.Configuraciones.EstadoCitaRegistro", b =>
                 {
                     b.Property<byte>("Id")
@@ -273,6 +328,33 @@ namespace AgendaSalon.Infrastructure.Persistencia.Migraciones
                         {
                             Id = (byte)4,
                             Nombre = "No asistió"
+                        });
+                });
+
+            modelBuilder.Entity("AgendaSalon.Infrastructure.Persistencia.Configuraciones.RolUsuarioRegistro", b =>
+                {
+                    b.Property<byte>("Id")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RolesUsuario", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = (byte)1,
+                            Nombre = "Administrador"
+                        },
+                        new
+                        {
+                            Id = (byte)2,
+                            Nombre = "Estilista"
                         });
                 });
 
@@ -342,6 +424,22 @@ namespace AgendaSalon.Infrastructure.Persistencia.Migraciones
                         .IsRequired();
 
                     b.Navigation("Categoria");
+                });
+
+            modelBuilder.Entity("AgendaSalon.Domain.Usuarios.Usuario", b =>
+                {
+                    b.HasOne("AgendaSalon.Domain.Estilistas.Estilista", "Estilista")
+                        .WithMany()
+                        .HasForeignKey("EstilistaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AgendaSalon.Infrastructure.Persistencia.Configuraciones.RolUsuarioRegistro", null)
+                        .WithMany()
+                        .HasForeignKey("Rol")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Estilista");
                 });
 
             modelBuilder.Entity("EstilistaServicios", b =>
