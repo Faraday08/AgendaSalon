@@ -45,7 +45,9 @@ public static class DependencyInjection
 
         return services
             .AddSeguridad()
-            .AddPersistencia(o => o.UseSqlServer(cadenaConexion));
+            // Reintentos ante errores transitorios: en Azure SQL serverless la base puede estar reanudándose.
+            .AddPersistencia(o => o.UseSqlServer(cadenaConexion, sql => sql.EnableRetryOnFailure(
+                maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
     }
 
     /// <summary>Hash de contraseñas y emisión de tokens. Las opciones de JWT se configuran aparte.</summary>

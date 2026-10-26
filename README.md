@@ -142,6 +142,26 @@ dotnet tool restore
 dotnet tool run dotnet-ef migrations add NombreDelCambio -p src/AgendaSalon.Infrastructure -s src/AgendaSalon.Api -o Persistencia/Migraciones
 ```
 
+## Despliegue (solo planes gratuitos)
+
+| Pieza | Dónde | Plan |
+|---|---|---|
+| Web (React) | GitHub Pages | Gratis |
+| API (.NET 10) | Azure App Service | F1, gratis |
+| Base de datos | Azure SQL Database | Oferta gratuita: 100 000 segundos de vCore y 32 GB al mes, con **pausa automática** si se agota (nunca cobra) |
+
+**Cómo se despliega:** cada push a `main` corre las pruebas y, si todo pasa, GitHub Actions publica la API en Azure y la web en GitHub Pages. GitHub entra a Azure con OIDC (identidad federada): no hay contraseñas de Azure guardadas en GitHub, y esa identidad solo puede desplegar en esta app.
+
+**Primera vez:** con Azure CLI (`az login`) y GitHub CLI (`gh auth login`) con sesión iniciada:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/azure/crear-recursos.ps1
+```
+
+El script revisa que la región ofrezca .NET 10 y la base gratuita antes de crear nada. Después crea los recursos, genera la contraseña de SQL y la clave del JWT directo en Azure (sin mostrarlas), configura los secretos del repositorio, activa GitHub Pages y lanza el primer despliegue.
+
+**Límites del plan gratuito:** la API se duerme tras unos minutos sin visitas y la base se pausa; la primera visita después de eso tarda unos segundos. El plan F1 da 60 minutos de CPU al día y hasta 5 conexiones de SignalR a la vez, más que suficiente para una demo.
+
 ## Pruebas
 
 ```bash

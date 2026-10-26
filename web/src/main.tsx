@@ -20,7 +20,7 @@ const clienteConsultas = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={clienteConsultas}>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <ProveedorSesion>
           <App />
         </ProveedorSesion>

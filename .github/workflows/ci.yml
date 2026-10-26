@@ -5,14 +5,16 @@ on:
     branches: ["**"]
   pull_request:
     branches: [main]
+  workflow_dispatch: # Permite lanzar el despliegue a mano (lo usa scripts/azure/crear-recursos.ps1).
 
 permissions:
   contents: read
 
-# Si llega un push nuevo a la misma rama, se cancela la ejecución anterior.
+# Si llega un push nuevo a la misma rama, se cancela la ejecución anterior,
+# excepto en main, para no cortar un despliegue a medias.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   compilar-y-probar:
@@ -86,3 +88,101 @@ jobs:
       # El build también revisa los tipos con tsc.
       - name: Build
         run: npm run build
+
+  # ---------- Despliegue (solo main, con las pruebas en verde y Azure ya configurado) ----------
+  # Las variables y secretos los crea scripts/azure/crear-recursos.ps1. Mientras no existan, estos trabajos se omiten.
+
+  desplegar-api:
+    name: Desplegar la API en Azure
+    needs: [compilar-y-probar, frontend]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AZURE_WEBAPP_NAME != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: produccion
+      url: ${{ vars.API_URL }}/salud
+    permissions:
+      contents: read
+      id-token: write # Inicio de sesión en Azure con OIDC, sin guardar contraseñas en GitHub.
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Instalar .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publicar la API
+        run: dotnet publish src/AgendaSalon.Api --configuration Release --output publicacion
+
+      - name: Iniciar sesión en Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Subir a App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: publicacion
+
+      # El plan gratuito arranca en frío: se reintenta hasta que la API conteste.
+      - name: Comprobar que la API responde
+        run: curl --fail --silent --show-error --retry 12 --retry-delay 15 --retry-all-errors "${{ vars.API_URL }}/salud"
+
+  desplegar-web:
+    name: Publicar la web en GitHub Pages
+    needs: [compilar-y-probar, frontend]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.API_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Construir para GitHub Pages
+        env:
+          VITE_API_URL: ${{ vars.API_URL }}
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      # GitHub Pages no sabe de rutas de React: con 404.html igual a index.html, /AgendaSalon/panel también carga la app.
+      - name: Permitir rutas de la aplicación
+        run: cp dist/index.html dist/404.html
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Subir el sitio
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+      - name: Publicar
+        id: despliegue
+        uses: actions/deploy-pages@v4

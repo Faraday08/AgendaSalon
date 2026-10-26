@@ -15,14 +15,24 @@ internal sealed class UnidadDeTrabajo(AgendaDbContext db) : IUnidadDeTrabajo
     public async Task<T> EjecutarEnTransaccionAsync<T>(Func<CancellationToken, Task<T>> operacion, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(operacion);
+
+        // Con reintentos activados (Azure SQL), EF exige que una transacción propia vaya dentro de su
+        // estrategia de ejecución: si falla por un error transitorio, se repite la operación completa.
+        var estrategia = db.Database.CreateExecutionStrategy();
         try
         {
-            // Serializable bloquea el rango leído. Si dos transacciones chocan,
-            // SQL Server elige a una como víctima de interbloqueo y la deshace.
-            await using var transaccion = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-            var resultado = await operacion(ct);
-            await transaccion.CommitAsync(ct);
-            return resultado;
+            return await estrategia.ExecuteAsync(async () =>
+            {
+                // Cada intento empieza limpio, sin las entidades que dejó a medias el intento anterior.
+                db.ChangeTracker.Clear();
+
+                // Serializable bloquea el rango leído. Si dos transacciones chocan, SQL Server deshace una;
+                // al reintentarla verá el horario ya ocupado y responderá con un conflicto normal.
+                await using var transaccion = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+                var resultado = await operacion(ct);
+                await transaccion.CommitAsync(ct);
+                return resultado;
+            });
         }
         catch (Exception ex) when (EsInterbloqueo(ex))
         {
@@ -30,7 +40,7 @@ internal sealed class UnidadDeTrabajo(AgendaDbContext db) : IUnidadDeTrabajo
         }
     }
 
-    // EF Core envuelve el SqlException en DbUpdateException y a veces en InvalidOperationException.
+    // EF Core envuelve el SqlException en DbUpdateException, InvalidOperationException o RetryLimitExceededException.
     private static bool EsInterbloqueo(Exception? ex)
     {
         for (; ex is not null; ex = ex.InnerException)

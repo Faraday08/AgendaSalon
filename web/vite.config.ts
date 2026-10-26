@@ -7,6 +7,8 @@ import { defineConfig } from 'vite'
 const api = process.env.API_URL ?? 'http://localhost:5063'
 
 export default defineConfig({
+  // En GitHub Pages el sitio vive en /AgendaSalon/; en desarrollo, en la raíz.
+  base: process.env.BASE_PATH ?? '/',
   plugins: [react()],
   server: {
     port: 5173,

@@ -1,4 +1,4 @@
-# Configura los secretos locales de la API con dotnet user-secrets (se guardan en tu perfil de Windows,
+﻿# Configura los secretos locales de la API con dotnet user-secrets (se guardan en tu perfil de Windows,
 # fuera del repositorio): una clave aleatoria para firmar los JWT y la cuenta del primer administrador.
 # Funciona en Windows PowerShell 5.1 y en PowerShell 7.
 #

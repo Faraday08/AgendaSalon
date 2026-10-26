@@ -83,6 +83,10 @@ builder.Services.AddCors(o => o.AddPolicy("Frontend", p => p
     .AllowAnyMethod()
     .AllowCredentials()));
 
+// Solo comprueba que la API responde: no consulta la base, para no despertar la base serverless
+// (ni gastar su cuota gratuita) cada vez que alguien revisa el estado.
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
 await app.Services.PrepararBaseDeDatosAsync();
@@ -102,6 +106,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<AgendaHub>(AgendaHub.Ruta);
+app.MapHealthChecks("/salud").DisableRateLimiting();
 
 await app.RunAsync();
 
