@@ -57,7 +57,11 @@ $cuenta = az account show --output json 2>$null | ConvertFrom-Json
 if (-not $cuenta) { throw 'No hay sesión de Azure. Ejecuta: az login' }
 gh auth status 2>$null | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'No hay sesión de GitHub. Ejecuta: gh auth login' }
-$repo = gh repo view --json nameWithOwner --jq .nameWithOwner
+# El repositorio sale de la carpeta del script, no de la carpeta desde donde se ejecuta:
+# así nunca se configuran secretos en otro repositorio por accidente.
+$raizRepo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$repo = git -C $raizRepo remote get-url origin | ForEach-Object { $_ -replace '^.*github\.com[:/]', '' -replace '\.git$', '' }
+if ($repo -notmatch '^[^/]+/[^/]+$') { throw "No se pudo leer el repositorio de GitHub de $raizRepo." }
 $propietario = $repo.Split('/')[0].ToLowerInvariant()
 
 $ayudaSql = az sql db create --help | Out-String
@@ -167,18 +171,18 @@ for ($intento = 1; $intento -le 6; $intento++) {
 
 # ---------- GitHub ----------
 Write-Paso "Variables y secretos de $repo"
-gh secret set AZURE_CLIENT_ID --body $idCliente
-gh secret set AZURE_TENANT_ID --body $cuenta.tenantId
-gh secret set AZURE_SUBSCRIPTION_ID --body $cuenta.id
-gh variable set AZURE_WEBAPP_NAME --body $app
-gh variable set API_URL --body $urlApi
+gh secret set AZURE_CLIENT_ID --repo $repo --body $idCliente
+gh secret set AZURE_TENANT_ID --repo $repo --body $cuenta.tenantId
+gh secret set AZURE_SUBSCRIPTION_ID --repo $repo --body $cuenta.id
+gh variable set AZURE_WEBAPP_NAME --repo $repo --body $app
+gh variable set API_URL --repo $repo --body $urlApi
 
 Write-Paso 'Activando GitHub Pages con despliegue desde GitHub Actions'
 gh api --method POST "repos/$repo/pages" -f build_type=workflow 2>$null | Out-Null
 if ($LASTEXITCODE -ne 0) { gh api --method PUT "repos/$repo/pages" -f build_type=workflow | Out-Null }
 
 Write-Paso 'Lanzando el primer despliegue'
-gh workflow run ci.yml --ref main
+gh workflow run ci.yml --repo $repo --ref main
 
 Write-Host ''
 Write-Host 'Listo.' -ForegroundColor Green
