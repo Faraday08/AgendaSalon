@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 *.db
 *.db-shm
 *.db-wal
+
+# Credenciales de prueba para el entorno local (nunca se suben)
+.credenciales-locales.txt
